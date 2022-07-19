@@ -1,31 +1,14 @@
+from copy import deepcopy
+from functools import lru_cache
 from pprint import pprint
 
 # TODO: Read from file
 
-# Encode types as numbers
-#
-# A = 0
-# B = 1
-# C = 2
-# D = 3
-# Empty = -1
-#
-rooms = [
-    [1, 3],
-    [0, 0],
-    [1, 3],
-    [2, 2],
-]
+# All spaces are either empty (set to -1) or occupied by amphipod
+# (set to index of a room given amphipod belongs to: A=0, B=1, C=2, D=3)
 
-#    .----------------------.
-#   | 0 1 2 3 4 5 6 7 8 9 A |
-#   '---- B | C | B | D ---'
-#       | A | D | C | A |
-#       '--------------'
-
-# room_exit_index = room_index * 2 + 2
-#
-hall = [-1] * 10
+rooms = ((1, 3), (0, 0), (1, 3), (2, 2))
+hall = (-1,) * 10
 banned_hall_positions = [2, 4, 6, 8]
 
 
@@ -40,125 +23,106 @@ def get_cost(amphipod_type):
         return 1000
 
 
+def swap_tuple_value(to_be_swapped, index, new_value):
+    to_be_swapped = list(to_be_swapped)
+    to_be_swapped[index] = new_value
+    return tuple(to_be_swapped)
+
+
 min_cost = float("inf")
 
-# TODO: Pass state here and add cache
-def recurse(cost=0, history=[]):
+
+@lru_cache(maxsize=None)
+def recurse(
+    rooms,
+    hall,
+    cost=0,
+):
     global min_cost
+
     if cost >= min_cost:
-        return
+        return None
 
     if (
-        rooms[0][0] == 0
-        and rooms[0][1] == 0
-        and rooms[1][0] == 1
-        and rooms[1][1] == 1
-        and rooms[2][0] == 2
-        and rooms[2][1] == 2
-        and rooms[3][0] == 3
-        and rooms[3][1] == 3
+        rooms[0].count(0) == len(rooms[0])
+        and rooms[1].count(1) == len(rooms[1])
+        and rooms[2].count(2) == len(rooms[2])
+        and rooms[3].count(3) == len(rooms[3])
     ):
         min_cost = min(min_cost, cost)
-        print(min_cost)
-        pprint(history)
         return
 
-    # Try all possible rooms
+    # Check all possible moves from a room to the hall
+
     for room_idx, room in enumerate(rooms):
-        # Figure out which amphipod to move
 
-        # If there is no one on top
-        if room[0] == -1:
-            # If there is no one on the bottom
-            # or the one on the bottom is already in the correct room
-            if room[1] == -1 or room[1] == room_idx:
-                to_move = None
-            else:
-                to_move = 1
-        else:
-            # If the one on the bottom  and on top is already in the correct room
-            if room[1] == room_idx and room[0] == room_idx:
-                to_move = None
-            else:
-                to_move = 0
+        # If there is an amphipod to move in a given room
+        if not room.count(-1) + room.count(room_idx) == len(room):
+            to_move = room.count(-1)
+            hall_index_outside_room = room_idx * 2 + 2
+            amphipod = room[to_move]
 
-        # If there is an amphipod to move
-        if to_move is not None:
-
-            # Figure out to what position in the hall it can be moved to
+            # Check if there are positions in the hall where
+            # an amphipod can move
             possible_positions = []
-            for position in range(10):
+            for position in range(len(hall)):
                 if position in banned_hall_positions:
                     continue
 
-                # If space is free - amphipod can move there
                 if hall[position] == -1:
                     possible_positions.append(position)
-                # If space is not free
                 else:
-                    if position < room_idx * 2 + 2:
-                        # space on the left of the room
+                    # Do not include positions that are blocked
+                    # by amphipod standing on the way
+                    if position < hall_index_outside_room:
                         possible_positions.clear()
-                    else:  # Space on the right of the room
+                    else:
                         break
 
-            # Try out all those possible positions
-            amphipod_type, room[to_move] = room[to_move], -1
+            if possible_positions:
+                new_room = swap_tuple_value(room, to_move, -1)
+                new_rooms = swap_tuple_value(rooms, room_idx, new_room)
 
-            for position in possible_positions:
-                hall[position] = amphipod_type
+                for position in possible_positions:
+                    new_hall = swap_tuple_value(hall, position, amphipod)
 
-                distance = to_move + 1 + abs(position - (room_idx * 2 + 2))
-                added_cost = get_cost(amphipod_type) * distance
-                history.append(
-                    f"amphipod {amphipod_type} moved from room {room_idx}, to hall to position {position}"
-                )
-                recurse(cost + added_cost, history)
-                history.pop()
-                hall[position] = -1
+                    distance = to_move + 1 + abs(position - hall_index_outside_room)
+                    new_cost = cost + get_cost(amphipod) * distance
 
-            room[to_move] = amphipod_type
+                    recurse(new_rooms, new_hall, new_cost)
 
-    # Check if amphipod can move into the room
-    for position in range(10):
+    # Check all possible moves from the hall to the rooms
+
+    for position in range(len(hall)):
+
+        # If there is an amphipod to move
         if hall[position] != -1:
-            amphipod_type = hall[position]
-            room_idx = amphipod_type
-            room = rooms[amphipod_type]
+            room_idx = hall[position]
+            room = rooms[room_idx]
 
-            move_to = None
-            if room[0] == -1:
-                if room[1] == -1:
-                    move_to = 1
-                elif room[1] == amphipod_type:
-                    move_to = 0
+            if room.count(-1) + room.count(room_idx) == len(room):
+                move_to = room.count(-1) - 1
+                hall_index_outside_room = room_idx * 2 + 2
+                amphipod = hall[position]
 
-            if move_to is not None:
-                # Check if there is amphipod on the way
-                if position < room_idx * 2 + 2:
-                    # If amphipod is on the left of the room
-                    path = hall[position + 1 : room_idx * 2 + 2]
-                    if path.count(-1) < len(path):
-                        continue
+                # Make sure there is no amphipod on the way
+                if position < hall_index_outside_room:
+                    path = hall[position + 1 : hall_index_outside_room]
                 else:
-                    # If amphipod is on the right of the room
-                    path = hall[room_idx * 2 + 2 : position]
-                    if path.count(-1) < len(path):
-                        continue
+                    path = hall[hall_index_outside_room:position]
 
-                hall[position], room[move_to] = -1, amphipod_type
+                if path.count(-1) < len(path):
+                    continue
+
+                new_hall = swap_tuple_value(hall, position, -1)
+                new_room = swap_tuple_value(room, move_to, amphipod)
+                new_rooms = swap_tuple_value(rooms, room_idx, new_room)
 
                 distance = move_to + 1 + abs(position - (room_idx * 2 + 2))
-                added_cost = get_cost(amphipod_type) * distance
+                new_cost = cost + get_cost(amphipod) * distance
 
-                history.append(
-                    f"amphipod {amphipod_type} moved from hall {position}, to room {room_idx}"
-                )
-                recurse(cost + added_cost, history)
-                history.pop()
-
-                hall[position], room[move_to] = amphipod_type, -1
+                recurse(new_rooms, new_hall, new_cost)
 
 
-recurse()
+recurse(rooms, hall)
 print(f"{min_cost = }")
