@@ -2,7 +2,7 @@ from copy import deepcopy
 from functools import lru_cache
 from pprint import pprint
 
-# TODO: Read from file
+hall = (-1,) * 11
 
 # All spaces are either empty (set to -1) or occupied by amphipod
 # (set to index of a room given amphipod belongs to: A=0, B=1, C=2, D=3)
