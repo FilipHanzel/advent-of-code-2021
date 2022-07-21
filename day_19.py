@@ -52,11 +52,13 @@ def rotations():
     ):
         x, y, z = orientation
 
+        # 4 rotations
         yield lambda p: (p[x], p[y], p[z])
         yield lambda p: (p[z], p[y], -p[x])
         yield lambda p: (-p[x], p[y], -p[z])
         yield lambda p: (-p[z], p[y], p[x])
 
+        # mirror and 4 other rotations
         yield lambda p: (-p[x], -p[y], p[z])
         yield lambda p: (p[z], -p[y], p[x])
         yield lambda p: (p[x], -p[y], -p[z])
